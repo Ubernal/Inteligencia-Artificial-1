@@ -1,0 +1,186 @@
+---
+title: "Arbolado Mendoza"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+suppressMessages(library(rpart))
+suppressMessages(library(caret))
+suppressMessages(library(readr))
+suppressMessages(library(dplyr))
+suppressMessages(library(plotly))
+suppressMessages(library(lubridate))
+```
+
+Lee los Datos
+
+```{r}
+data_train <- readr::read_csv("C:/Users/user/Documents/Arbolado/arbolado-mza-dataset.csv",
+                              col_types = cols(
+  id = col_integer(),
+  especie = col_character(),
+  ultima_modificacion = col_character(),
+  altura = col_character(),
+  circ_tronco_cm = col_double(),
+  diametro_tronco = col_character(),
+  long = col_double(),
+  lat = col_double(),
+  seccion = col_integer(),
+  nombre_seccion = col_character(),
+  area_seccion = col_double(),
+  inclinacion_peligrosa = col_integer()
+))
+
+data_test <-  readr::read_csv("C:/Users/user/Documents/Arbolado/arbolado-mza-dataset-test.csv",col_types = cols(
+  id = col_integer(),
+  especie = col_character(),
+  ultima_modificacion = col_character(),
+  altura = col_character(),
+  circ_tronco_cm = col_double(),
+  diametro_tronco = col_character(),
+  long = col_double(),
+  lat = col_double(),
+  seccion = col_integer(),
+  nombre_seccion = col_character(),
+  area_seccion = col_double()
+))
+
+
+
+```
+
+
+
+
+```{r}
+
+data_train<-data_train %>% mutate(inclinacion_peligrosa=ifelse(inclinacion_peligrosa=='1','si','no'))
+data_train$inclinacion_peligrosa <-as.factor(data_train$inclinacion_peligrosa)
+```
+
+Con esto mido en segundos el tiempo desde la ultima modificacion 
+```{r}
+data_train <- data_train %>% mutate(ultima_modificacion = ymd_hms(ultima_modificacion) )
+
+this_day <- today()
+
+data_train <- data_train %>% mutate(ultima_modificacion = as.duration( interval(ultima_modificacion, this_day)))
+
+data_test <- data_test %>% mutate(ultima_modificacion = ymd_hms(ultima_modificacion) )
+
+data_test <- data_test %>% mutate(ultima_modificacion = as.duration( interval(ultima_modificacion, this_day)))
+
+
+```
+
+Genero un data train nuevo, tomando todos los inclinacion_peligrosa = "Si" y solo 3000 de los inclinacion_peligrosa= "No", luego le agrego uno de especie = "Arbol del cielo" para evitar que me salga el error mas adelante 
+
+
+```{r}
+data_train_reduced <- rbind(
+  data_train %>% filter(inclinacion_peligrosa == "no") %>% sample_n(3000),
+  data_train %>% filter(inclinacion_peligrosa == "si"),
+  data_train %>% filter(especie == "rbol del cielo"))
+```
+
+Divido el datatrain_reduced en dos, uno para entrenar y otro para testear, a la formula le paso Altura circunferencia de tronco, seccion, especie, y nombre seccion (este ultimo aunque me parecia inutil, mejoro considerablemente el resultado)
+
+```{r}
+trainset <- data_train_reduced
+trainIndex <- createDataPartition(as.factor(trainset$inclinacion_peligrosa), p=0.70, list=FALSE)
+data_train <- trainset[ trainIndex,]
+data_test_1 <-  trainset[-trainIndex,]
+colnames(data_train) <- make.names(colnames(data_train))
+colnames(data_test_1) <- make.names(colnames(data_test_1))
+data_train$inclinacion_peligrosa <- as.factor(data_train$inclinacion_peligrosa)
+data_test_1$inclinacion_peligrosa <- as.factor(data_test_1$inclinacion_peligrosa)
+
+train_formula<-formula(inclinacion_peligrosa~altura+ circ_tronco_cm  + seccion + especie+ ultima_modificacion + nombre_seccion)
+
+ctrl_fast <- trainControl(method="cv", 
+                       number=6, 
+                       verboseIter=T,
+                     classProbs=F,
+                     allowParallel = TRUE
+                  
+                     )  
+tree_model_3<- train(train_formula,
+               data = data_train,
+               tuneLength=3,
+               #method="rpart",
+               method = "rf",
+               #method = "knn",
+               preProcess=c("scale","center"),
+               trControl = ctrl_fast) 
+
+tree_model_3
+```
+
+Generacion del archivo de ENVIO
+ 
+```{r}
+preds_tree_probs=predict(tree_model_3,data_test,type='prob')
+head(preds_tree_probs)
+```
+```{r}
+preds_tree=ifelse(preds_tree_probs[,2] >=0.5,1,0)
+head(preds_tree)
+```
+ 
+```{r}
+submission<-data.frame(id=data_test$id,inclinacion_peligrosa=preds_tree)
+readr::write_csv(submission,"./ejemplo11.csv")
+head(submission)
+```
+
+
+```{r}
+set.seed(100) # para que sea un ejemplo reproducible
+data_validation_index<-sample(nrow(data_train),nrow(data_train)*0.1)
+data_validation<-data_train[data_validation_index,]
+data_train<-data_train[-data_validation_index,]
+```
+
+```{r}
+train_formula<-formula(inclinacion_peligrosa~altura+circ_tronco_cm+lat+long+seccion+especie)
+tree_model_4<-rpart(train_formula,data=data_train)
+```
+
+```{r}
+preds_tree_probs=predict(tree_model_4,data_validation,type='prob')
+preds_tree=ifelse(preds_tree_probs[,2] >=0.5,'si','no')
+resultados_validation<-data.frame(inclinacion_peligrosa=preds_tree)
+```
+
+
+Calculo de la matriz de confusion
+
+```{r}
+confusionMatrix(resultados_validation$inclinacion_peligrosa,data_validation$inclinacion_peligrosa)
+
+```
