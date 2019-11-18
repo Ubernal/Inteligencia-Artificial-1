@@ -43,15 +43,15 @@ class Enviroment:
             for x in range (0,self.sizex):
 
                 if self.tablero[x][y]==0:
-                    print("⬜",end=" ")
+                    print("0",end=" ")
 
                 if self.tablero[x][y]==1:
-                    print("⬛",end=" ")
+                    print("1",end=" ")
 
                 if self.tablero[x][y]==5:
-                    print("🔷",end=" ")
+                    print("S",end=" ")
                 
                 if self.tablero[x][y]==10:
-                    print("🔶",end=" ")
+                    print("E",end=" ")
 
             print("]")
