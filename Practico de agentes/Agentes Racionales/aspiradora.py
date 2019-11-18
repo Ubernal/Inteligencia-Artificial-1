@@ -8,6 +8,7 @@ class Aspiradora:
         self.room.tablero[startX][startY]=5
         self.puntos=0
         self.life = 0
+        self.max=961
     
     def perspective(self):
         for x in range (0,self.room.SizeX()):
@@ -96,7 +97,7 @@ class Aspiradora:
         permit = True
         UP = True
 
-        while self.life < 1000:
+        while self.life < self.max:
             if self.room.isDirty(self.currentX,self.currentY):
                 self.room.Clean(self.currentX,self.currentY)
                 self.puntos+=1
@@ -105,6 +106,12 @@ class Aspiradora:
             if self.currentX == 0:
                 if self.goUP() == False:
                     self.goRight()
+                continue
+            
+            if self.currentY == self.room.SizeY():
+                if self.goUP() == False:
+                    self.goRight()
+                continue
             
             if (self.currentY % 2 == 0):
                 if self.goRight() == False:
@@ -114,13 +121,16 @@ class Aspiradora:
             if (self.currentY % 2 == 1 and self.currentX != 1):
                 self.goLeft()
                 continue
+            
+            if self.currentY == (self.room.SizeY()-1) and self.currentX == 1:
+                self.goLeft()
+                continue
 
             self.goDown()
-                
 
                 
         print("Limpiado: " + str(self.puntos))
-        print("Vida restante: " + str(1000 - self.life))
+        print("Vida restante: " + str(self.max - self.life))
         self.room.tablero[self.currentX][self.currentY]=10
             
 
